@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* Font system */
+  --font-display: "Geist Sans", "sans-serif";
+
+  /* Breakpoints */
+  --breakpoint-3xl: 1920px;
+
+  /* Backgrounds / surfaces */
+  --color-surface-light: oklch(0.98 0 0);   /* gray-50 */
+  --color-surface-dark: oklch(0.19 0 0);    /* gray-900 */
+  --color-card-light: oklch(1 0 0);         /* white */
+  --color-card-dark: oklch(0.25 0 0);       /* gray-800 */
+
+  /* Text */
+  --color-text-light: oklch(0.15 0 0);      /* black */
+  --color-text-dark: oklch(0.98 0 0);       /* white */
+
+  /* Status colors */
+  --color-safe: oklch(0.8 0.15 150);        /* green */
+  --color-warning: oklch(0.85 0.15 80);     /* amber */
+  --color-danger: oklch(0.65 0.25 30);      /* red */
+  --color-info: oklch(0.75 0.15 250);       /* blue */
+  --color-hazardous: oklch(0.55 0.2 310);   /* purple */
+
+  /* Motion */
+  --ease-fluid: cubic-bezier(0.3, 0, 0, 1);
+  --ease-snappy: cubic-bezier(0.2, 0, 0, 1);
+}
+
+*{
+  box-sizing: border-box;
+}
