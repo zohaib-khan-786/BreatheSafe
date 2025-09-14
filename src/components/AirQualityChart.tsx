@@ -64,7 +64,6 @@ const getPollutantColor = (key: string, value: number) => {
 
 export default function AirQualityChart() {
   const latest = useSensorStore((s) => s.latest);  // ⬅️ now from SensorStore
-  console.log(latest);
   const [positions, setPositions] = useState({
     co2: getPosition(140),
     pm25: getPosition(170),

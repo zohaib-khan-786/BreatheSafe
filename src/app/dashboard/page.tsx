@@ -9,8 +9,9 @@ import { CgDanger } from "react-icons/cg";
 import { GiCrossMark } from "react-icons/gi";
 import { useTheme } from "next-themes";
 import { SensorReading } from "@/models/sensors";
-import io from "socket.io-client";
 import { useSensorStore } from "@/store/sensorStore";
+
+import { io, Socket } from "socket.io-client";
 
 interface Forecast {
   day: string;
@@ -19,7 +20,9 @@ interface Forecast {
   confidence: number;
   mainPollutant?: string;
 }
-
+interface ServerToClientEvents {
+  newReading: (data: SensorReading) => void;
+}
 // Enhanced AQI category function (matches ESP8266 logic)
 const getAQICategory = (aqi: number): string => {
   if (aqi <= 50) return "EXCELLENT";
@@ -80,6 +83,8 @@ const getAQIIcon = (category: string) => {
   }
 };
 
+let socket: Socket<ServerToClientEvents> | null = null;
+
 export default function Dashboard() {
   const { theme } = useTheme();
   const { addReading } = useSensorStore();
@@ -90,13 +95,28 @@ export default function Dashboard() {
 
   // Socket.io connection
   useEffect(() => {
-    const socket = io(`${process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3000"}`);
+    if (!socket) {
+      socket = io(
+        process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3000"
+      );
 
-    socket.on("newReading", (data: SensorReading) => {
-      setLatest(data);
-      addReading(data);
-    });
+      socket.on("connect", () => {
+        console.log("✅ Socket connected:", socket?.id);
+      });
 
+      socket.on("disconnect", () => {
+        console.log("❌ Socket disconnected");
+      });
+
+      socket.on("newReading", (data: SensorReading) => {
+        setLatest(data);
+        addReading(data);
+      });
+    }
+
+    return () => {
+      socket?.off("newReading");
+    };
   }, [addReading]);
 
   // Fetch 3-day forecast dynamically
