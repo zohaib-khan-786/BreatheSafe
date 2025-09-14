@@ -77,10 +77,10 @@ function assessAirQuality(co2_ppm: number | null, pm25: number | null, pm10: num
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { field: string } }
+  { params }: { params: Promise<{ field: string }> }
 ) {
   try {
-    const field = params.field.toLowerCase();
+    const field = (await params).field.toLowerCase();
 
     // Optional date range
     const { searchParams } = new URL(req.url);
