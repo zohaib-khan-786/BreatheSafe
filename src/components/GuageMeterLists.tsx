@@ -1,42 +1,118 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSensorStore } from "@/store/sensorStore";
 import GaugeMeter from "./GuageMeter";
 
-type AirQualityData = {
-  o3: number;
-  no2: number;
-  pm25: number;
-  pm10: number;
-  humidity: number;
-  temperature: number;
-};
-
 export default function GuageMeterList() {
-  const [data, setData] = useState<AirQualityData>({
-    o3: 231,
-    no2: 76,
-    pm25: 346,
-    pm10: 912,
-    humidity: 64,
-    temperature: 17,
-  });
+  const latest = useSensorStore((s) => s.latest);
 
-  useEffect(() => {
-    // Example: fetch from API
-    // fetch("/api/airquality")
-    //   .then((res) => res.json())
-    //   .then(setData);
-  }, []);
+  if (!latest) {
+    return <p className="text-center text-gray-400 mt-6">Waiting for sensor data...</p>;
+  }
 
   return (
     <div className="grid grid-cols-3 gap-6 mt-12">
-      <GaugeMeter title="Ozone" value={data.o3} unit="µg/m³" min={0} max={400} />
-      <GaugeMeter title="Humidity" value={data.humidity} unit="%" min={0} max={100} />
-      <GaugeMeter title="Temperature" value={data.temperature} unit="°C" min={0} max={50} />
-      <GaugeMeter title="Air Pollution PM 2.5" value={data.pm25} unit="µg/m³" min={0} max={500} />
-      <GaugeMeter title="Air Pollution PM 10" value={data.pm10} unit="µg/m³" min={0} max={1000} />
-      <GaugeMeter title="Nitrogen Dioxide" value={data.no2} unit="µg/m³" min={0} max={400} />
+      {/* Gas sensors - MQ135 typically detects up to 1000+ ppm for most gases */}
+      <GaugeMeter 
+        title="CO₂" 
+        value={latest.co2} 
+        unit="ppm" 
+        min={0} 
+        max={5000} 
+        thresholds={[400, 1000, 2000, 3000, 4000]} // Good, Fair, Moderate, Poor, Very Poor, Extremely Poor
+      />
+      <GaugeMeter 
+        title="NH₃" 
+        value={latest.nh3} 
+        unit="ppm" 
+        min={0} 
+        max={100} 
+        thresholds={[10, 20, 30, 40, 50]} 
+      />
+      <GaugeMeter 
+        title="Alcohol" 
+        value={latest.alcohol} 
+        unit="ppm" 
+        min={0} 
+        max={200} 
+        thresholds={[20, 40, 60, 80, 100]} 
+      />
+      <GaugeMeter 
+        title="CO" 
+        value={latest.co} 
+        unit="ppm" 
+        min={0} 
+        max={100} 
+        thresholds={[5, 10, 20, 35, 50]} // OSHA limits: 35ppm for 8h, 50ppm for 8h is dangerous
+      />
+      <GaugeMeter 
+        title="Benzene" 
+        value={latest.benzene} 
+        unit="ppm" 
+        min={0} 
+        max={10} 
+        thresholds={[0.5, 1, 2, 5, 8]} // OSHA limit: 1ppm, dangerous above 5ppm
+      />
+      <GaugeMeter 
+        title="Smoke" 
+        value={latest.smoke} 
+        unit="ppm" 
+        min={0} 
+        max={500} 
+        thresholds={[50, 100, 200, 300, 400]} 
+      />
+      
+      {/* Environmental sensors */}
+      <GaugeMeter 
+        title="Temperature" 
+        value={latest.temperature} 
+        unit="°C" 
+        min={-10} 
+        max={50} 
+        thresholds={[10, 20, 30, 40, 45]} // Comfortable range: 18-24°C
+      />
+      <GaugeMeter 
+        title="Humidity" 
+        value={latest.humidity} 
+        unit="%" 
+        min={0} 
+        max={100} 
+        thresholds={[30, 50, 70, 80, 90]} // Comfortable range: 30-60%
+      />
+      <GaugeMeter 
+        title="Pressure" 
+        value={latest.pressure} 
+        unit="hPa" 
+        min={970} 
+        max={1050} 
+        thresholds={[990, 1010, 1020, 1030, 1040]} // Normal range: 1013±20 hPa
+      />
+      
+      {/* Particulate Matter sensors */}
+      <GaugeMeter 
+        title="PM1" 
+        value={latest.pm1} 
+        unit="µg/m³" 
+        min={0} 
+        max={100} 
+        thresholds={[10, 20, 30, 40, 50]} 
+      />
+      <GaugeMeter 
+        title="PM 2.5" 
+        value={latest.pm25} 
+        unit="µg/m³" 
+        min={0} 
+        max={250} 
+        thresholds={[12, 35, 55, 150, 250]} // Based on EPA standards
+      />
+      <GaugeMeter 
+        title="PM 10" 
+        value={latest.pm10} 
+        unit="µg/m³" 
+        min={0} 
+        max={500} 
+        thresholds={[54, 154, 254, 354, 424]} // Based on EPA standards
+      />
     </div>
   );
 }

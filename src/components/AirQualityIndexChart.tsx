@@ -1,242 +1,261 @@
-'use client';
+// components/AirQualityIndexChart.tsx
+"use client";
 
-import React, { useState, useMemo } from 'react';
+import { useState, useEffect } from "react";
+import { FiCalendar, FiDownload } from "react-icons/fi";
 import {
   LineChart,
   Line,
   XAxis,
   YAxis,
-  CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  ReferenceLine
-} from 'recharts';
+  CartesianGrid,
+  Legend
+} from "recharts";
+import { DateRange, RangeKeyDict } from "react-date-range";
+import { format } from "date-fns";
+import "react-date-range/dist/styles.css";
+import "react-date-range/dist/theme/default.css";
 
-// Define types
-interface AQIDataPoint {
-  timestamp: string;
+type DataPoint = { 
+  time: string; 
   value: number;
-  fullDate: string;
+  quality?: string;
+  score?: number;
+};
+
+type RangeOption = "5m" | "1h" | "6h" | "1d" | "1w" | "1M";
+
+interface ChartCardProps {
+  title: string;
+  unit: string;
+  endpoint: string;
+  showQuality?: boolean;
 }
 
-interface TimeRange {
-  label: string;
-  value: string;
-}
+// Color mapping for air quality levels
+const qualityColors: Record<string, string> = {
+  "EXCELLENT": "#00FF00",
+  "GOOD": "#ADFF2F",
+  "MODERATE": "#FFFF00",
+  "POOR": "#FFA500",
+  "VERY_POOR": "#FF4500",
+  "HAZARDOUS": "#FF0000"
+};
 
-const AirQualityIndexChart: React.FC = () => {
-  const [selectedRange, setSelectedRange] = useState<string>('1h');
-  
-  // Time range options
-  const timeRanges: TimeRange[] = [
-    { label: '1h', value: '1h' },
-    { label: '6h', value: '6h' },
-    { label: '1d', value: '1d' },
-    { label: '1w', value: '1w' },
-    { label: '1M', value: '1M' },
-  ];
+export default function AirQualityIndexChart({ 
+  title, 
+  unit, 
+  endpoint, 
+  showQuality = true 
+}: ChartCardProps) {
+  const [range, setRange] = useState<RangeOption>("1d");
+  const [data, setData] = useState<DataPoint[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  // Raw input data from the image
-  const rawInputData = [
-    'Sep 09:18:44',
-    'Sep 09:20:00',
-    'Sep 09:21:24',
-    'Sep 09:22:58',
-    'Sep 10:06:23',
-    'Sep 10:15:48',
-    'Sep 10:04:27',
-    'Sep 10:05:47',
-    'Sep 10:07:07',
-    'Sep 10:08:37',
-    'Sep 10:11:16',
-    'Sep 10:12:56',
-    'Sep 10:14:36',
-    'Sep 10:15:55',
-    'Sep 10:17:19'
-  ];
+  // Date range state
+  const [dateRange, setDateRange] = useState([
+    {
+      startDate: new Date(Date.now() - 24 * 60 * 60 * 1000),
+      endDate: new Date(),
+      key: "selection",
+    },
+  ]);
+  const [showCalendar, setShowCalendar] = useState(false);
 
-  // Generate AQI data based on the input timestamps
-  const generateAQIData = (): AQIDataPoint[] => {
-    return rawInputData.map((timestamp, index) => {
-      // Generate realistic AQI values between 30-150 with some pattern
-      const baseValue = 50;
-      const variation = Math.sin(index / 2) * 30 + (Math.random() * 20 - 10);
-      const value = Math.max(30, Math.min(150, Math.round(baseValue + variation)));
-      
-      return {
-        timestamp,
-        value,
-        fullDate: `2025-09-10 ${timestamp.split(' ')[1]}`
-      };
-    });
-  };
+  // Fetch data from API whenever range or dateRange changes
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const params = new URLSearchParams({
+          from: dateRange[0].startDate.toISOString(),
+          to: dateRange[0].endDate.toISOString()
+        });
 
-  const aqiData = useMemo(() => generateAQIData(), []);
+        const res = await fetch(`${endpoint}?${params}`);
+        if (!res.ok) throw new Error("Failed to fetch data");
+        const json: DataPoint[] = await res.json();
+        setData(json);
+      } catch (err) {
+        console.error("API fetch error:", err);
+        setData([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, [range, endpoint, dateRange]);
 
-  // Calculate statistics
-  const calculateStats = () => {
-    const values = aqiData.map(point => point.value);
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    const avg = Math.round(values.reduce((sum, val) => sum + val, 0) / values.length);
+  const ranges: RangeOption[] = ["5m", "1h", "6h", "1d", "1w", "1M"];
+
+  const handleDownload = () => {
+    const headers = showQuality ? "Time,Value,Quality,Score\n" : "Time,Value\n";
+    const csv = data.map((d) => 
+      showQuality 
+        ? `${d.time},${d.value},${d.quality || ""},${d.score || ""}`
+        : `${d.time},${d.value}`
+    ).join("\n");
     
-    return { min, max, avg, current: values[values.length - 1] };
+    const blob = new Blob([headers + csv], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${title.replace(/\s+/g, "_").toLowerCase()}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
   };
 
-  const stats = calculateStats();
-
-  // Custom tooltip component
+  // Custom tooltip for AQI with quality information
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
+      const data = payload[0].payload;
       return (
-        <div className="bg-white p-3 border border-gray-200 rounded shadow-md">
-          <p className="text-gray-700">{`Time: ${label}`}</p>
-          <p className="font-medium text-blue-600">{`AQI: ${payload[0].value}`}</p>
+        <div className="bg-gray-800 p-3 border border-gray-600 rounded-lg">
+          <p className="text-gray-300">{format(new Date(label), "PPpp")}</p>
+          <p className="font-semibold" style={{ color: payload[0].color }}>
+            {title}: {payload[0].value.toFixed(1)} {unit}
+          </p>
+          {data.quality && (
+            <p className="mt-1" style={{ color: qualityColors[data.quality] || "#FFF" }}>
+              Quality: {data.quality}
+            </p>
+          )}
+          {data.score && (
+            <p className="text-sm text-gray-400">
+              AQI Score: {data.score.toFixed(0)}
+            </p>
+          )}
         </div>
       );
     }
     return null;
   };
 
-  // Format X-axis ticks to show only time
+  // Format timestamp for X-axis
   const formatXAxis = (tickItem: string) => {
-    return tickItem.split(' ')[1]; // Return only the time part
+    const date = new Date(tickItem);
+    return format(date, "HH:mm");
   };
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-md max-w-4xl mx-auto font-sans">
-      <h1 className="text-2xl font-bold mb-6 text-gray-800">Air Quality Index</h1>
-      
-      {/* Input data section */}
-      <div className="mb-8">
-        <h2 className="text-lg font-semibold mb-2 text-gray-700">Input:</h2>
-        <div className="grid grid-cols-3 md:grid-cols-5 gap-2 text-sm">
-          {rawInputData.map((timestamp, index) => (
-            <div key={index} className="text-gray-600 bg-gray-50 p-1 rounded">
-              {timestamp}
-            </div>
+    <div className="bg-surface-light dark:bg-surface-dark rounded-xl mb-4 p-4 shadow-md">
+      {/* Header */}
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="font-semibold">{title}</h2>
+        <button
+          onClick={handleDownload}
+          className="text-gray-400 hover:text-white p-2 rounded hover:bg-gray-700"
+          title="Download CSV"
+        >
+          <FiDownload />
+        </button>
+      </div>
+
+      {/* Chart */}
+      <div className="h-72">
+        {loading ? (
+          <div className="flex items-center justify-center h-full text-gray-400">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+            <span className="ml-2">Loading data...</span>
+          </div>
+        ) : data.length === 0 ? (
+          <div className="flex items-center justify-center h-full text-gray-400">
+            No data available
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={data}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+              <XAxis 
+                dataKey="time" 
+                stroke="#9ca3af"
+                tickFormatter={formatXAxis}
+              />
+              <YAxis
+                stroke="#9ca3af"
+                label={{
+                  value: unit,
+                  angle: -90,
+                  position: "insideLeft",
+                  fill: "#9ca3af",
+                }}
+              />
+              <Tooltip content={<CustomTooltip />} />
+              <Line
+                type="monotone"
+                dataKey="value"
+                stroke={showQuality ? "#22c55e" : "#3b82f6"}
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 4, strokeWidth: 0 }}
+              />
+              {showQuality && data.some(d => d.quality) && (
+                <Legend 
+                  formatter={(value) => (
+                    <span style={{ color: qualityColors[value] || "#FFF" }}>
+                      {value}
+                    </span>
+                  )}
+                />
+              )}
+            </LineChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div className="flex justify-between items-center text-gray-400 text-sm mt-2">
+        <div className="flex gap-2 flex-wrap">
+          <span>Last:</span>
+          {ranges.map((r) => (
+            <button
+              key={r}
+              onClick={() => setRange(r)}
+              className={`px-2 py-1 rounded ${
+                range === r 
+                  ? "text-green-400 bg-gray-700 font-semibold" 
+                  : "hover:text-white hover:bg-gray-700"
+              }`}
+            >
+              {r}
+            </button>
           ))}
         </div>
-      </div>
-      
-      <div className="border-t border-gray-200 my-6"></div>
-      
-      {/* Chart and controls section */}
-      <div className="flex flex-col lg:flex-row gap-6">
-        {/* Time range selector */}
-        <div className="flex flex-col">
-          <div className="text-sm font-medium mb-2 text-gray-700">Last:</div>
-          <div className="flex flex-wrap gap-2">
-            {timeRanges.map((range) => (
-              <button
-                key={range.value}
-                className={`px-3 py-1 rounded-full text-sm transition-colors ${
-                  selectedRange === range.value
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-                onClick={() => setSelectedRange(range.value)}
-              >
-                {range.label}
-              </button>
-            ))}
-          </div>
-          <div className="mt-4 text-xs text-gray-500 bg-gray-50 p-2 rounded">
-            Sep 09:18:44 - Sep 10:17:19
-          </div>
-          <div className="mt-2 text-xs text-gray-500">
-            09/3/2025 16:02 - 10/3/2025 16:02
-          </div>
-        </div>
-        
-        {/* Chart visualization */}
-        <div className="flex-1">
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart
-                data={aqiData}
-                margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis 
-                  dataKey="timestamp" 
-                  tickFormatter={formatXAxis}
-                  tick={{ fontSize: 12 }}
-                />
-                <YAxis 
-                  domain={[0, 200]} 
-                  tick={{ fontSize: 12 }}
-                  tickCount={6}
-                />
-                <Tooltip content={<CustomTooltip />} />
-                <Line 
-                  type="monotone" 
-                  dataKey="value" 
-                  stroke="#3b82f6" 
-                  strokeWidth={2}
-                  dot={{ fill: '#3b82f6', r: 4 }}
-                  activeDot={{ r: 6, fill: '#2563eb' }}
-                />
-                <ReferenceLine y={50} stroke="#10b981" strokeDasharray="3 3" />
-                <ReferenceLine y={100} stroke="#f59e0b" strokeDasharray="3 3" />
-                <ReferenceLine y={150} stroke="#ef4444" strokeDasharray="3 3" />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-          
-          {/* Stats */}
-          <div className="flex justify-between mt-4 text-sm">
-            <div>
-              <span className="text-gray-500">Min: </span>
-              <span className="font-medium">{stats.min}</span>
+
+        {/* Date range picker */}
+        <div className="flex items-center gap-2 relative">
+          <button
+            onClick={() => setShowCalendar((prev) => !prev)}
+            className="hover:text-white flex items-center gap-2 px-2 py-1 rounded hover:bg-gray-700"
+          >
+            {format(dateRange[0].startDate, "MM/dd/yyyy HH:mm")} -{" "}
+            {format(dateRange[0].endDate, "MM/dd/yyyy HH:mm")} <FiCalendar />
+          </button>
+
+          {showCalendar && (
+            <div className="absolute right-0 top-10 z-50 bg-gray-800 border border-gray-600 rounded-lg shadow-xl">
+              <DateRange
+                ranges={dateRange}
+                onChange={(item: RangeKeyDict) => {
+                  setDateRange([
+                    {
+                      startDate: item.selection.startDate ?? new Date(),
+                      endDate: item.selection.endDate ?? new Date(),
+                      key: "selection",
+                    },
+                  ]);
+                  setShowCalendar(false);
+                }}
+                moveRangeOnFirstSelection={false}
+                editableDateInputs
+                rangeColors={["#10B981"]}
+              />
             </div>
-            <div>
-              <span className="text-gray-500">Avg: </span>
-              <span className="font-medium">{stats.avg}</span>
-            </div>
-            <div>
-              <span className="text-gray-500">Max: </span>
-              <span className="font-medium">{stats.max}</span>
-            </div>
-          </div>
-        </div>
-        
-        {/* Current value */}
-        <div className="flex flex-col items-center justify-center">
-          <div className="text-4xl font-bold text-blue-600">{stats.current}</div>
-          <div className="text-sm text-gray-500 mt-1">Current AQI</div>
-          <div className="mt-4 text-xs text-gray-500">
-            <div className={`px-2 py-1 rounded-full ${
-              stats.current <= 50 ? 'bg-green-100 text-green-800' :
-              stats.current <= 100 ? 'bg-yellow-100 text-yellow-800' :
-              'bg-red-100 text-red-800'
-            }`}>
-              {stats.current <= 50 ? 'Good' :
-               stats.current <= 100 ? 'Moderate' : 'Unhealthy'}
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      {/* AQI scale explanation */}
-      <div className="mt-6 pt-4 border-t border-gray-200">
-        <div className="flex items-center justify-between text-xs">
-          <div className="flex items-center">
-            <div className="w-3 h-3 bg-green-500 rounded-full mr-1"></div>
-            <span>0-50: Good</span>
-          </div>
-          <div className="flex items-center">
-            <div className="w-3 h-3 bg-yellow-500 rounded-full mr-1"></div>
-            <span>51-100: Moderate</span>
-          </div>
-          <div className="flex items-center">
-            <div className="w-3 h-3 bg-red-500 rounded-full mr-1"></div>
-            <span>101-150: Unhealthy</span>
-          </div>
+          )}
         </div>
       </div>
     </div>
   );
-};
-
-export default AirQualityIndexChart;
+}
