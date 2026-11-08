@@ -10,8 +10,9 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"]
-    }
+    },
+    "types": ["node", "express"]
   },
-  "include": ["server.ts", "src/server/**/*"],
+  "include": ["server.ts", "src/server/**/*", "src/lib/**/*"],
   "exclude": ["node_modules", ".next", "dist"]
 }

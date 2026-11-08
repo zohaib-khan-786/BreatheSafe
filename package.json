@@ -2,8 +2,9 @@
   "name": "breathe-safe",
   "version": "0.1.0",
   "private": true,
+  "type": "commonjs",
   "scripts": {
-    "dev": "ts-node server.ts",
+    "dev": "cross-env TS_NODE_PROJECT=tsconfig.server.json ts-node server.ts",
     "build": "next build && tsc -p tsconfig.server.json",
     "start": "cross-env NODE_ENV=production node dist/server.js",
     "build:standalone": "next build --standalone",

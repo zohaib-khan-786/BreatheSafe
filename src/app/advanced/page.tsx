@@ -23,14 +23,14 @@ let socket: Socket<ServerToClientEvents> | null = null;
 
 export default function AdvancedDashboard() {
   const [latest, setLatest] = useState<SensorReading | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const { addReading } = useSensorStore();
 
   useEffect(() => {
     if (!socket) {
       // ✅ assign to global socket (not redeclare)
-      socket = io(
-        process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3000"
-      );
+      socket = io(process.env.NEXT_PUBLIC_SOCKET_URL);
 
       socket.on("connect", () => {
         console.log("✅ Socket connected:", socket?.id);
@@ -41,8 +41,17 @@ export default function AdvancedDashboard() {
       });
 
       socket.on("newReading", (data: SensorReading) => {
+        console.log("📡 Advanced Dashboard received:", {
+          timestamp: data.timestamp,
+          aqi: data.aqi,
+          quality: data.quality,
+          r0: data.r0,
+          firmware: data.firmware_version,
+          uptime: data.uptime
+        });
         setLatest(data);
         addReading(data);
+        setLastUpdated(new Date());
       });
     }
 
@@ -60,7 +69,7 @@ export default function AdvancedDashboard() {
         </button>
       </Link>
 
-      <Hero />
+      <Hero quality={latest?.quality} />
       <GuageMeterList />
       <ChartCard title="Air Quality Index" unit="AQI" endpoint="/api/sensor/aqi" />
       <ParameterChartList />

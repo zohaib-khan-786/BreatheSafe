@@ -89,29 +89,47 @@ export default function GuageMeterList() {
       />
       
       {/* Particulate Matter sensors */}
-      <GaugeMeter 
-        title="PM1" 
-        value={latest.pm1} 
-        unit="µg/m³" 
-        min={0} 
-        max={100} 
-        thresholds={[10, 20, 30, 40, 50]} 
+      <GaugeMeter
+        title="PM1"
+        value={latest.pm1}
+        unit="µg/m³"
+        min={0}
+        max={100}
+        thresholds={[10, 20, 30, 40, 50]}
       />
-      <GaugeMeter 
-        title="PM 2.5" 
-        value={latest.pm25} 
-        unit="µg/m³" 
-        min={0} 
-        max={250} 
+      <GaugeMeter
+        title="PM 2.5"
+        value={latest.pm25}
+        unit="µg/m³"
+        min={0}
+        max={250}
         thresholds={[12, 35, 55, 150, 250]} // Based on EPA standards
       />
-      <GaugeMeter 
-        title="PM 10" 
-        value={latest.pm10} 
-        unit="µg/m³" 
-        min={0} 
-        max={500} 
+      <GaugeMeter
+        title="PM 10"
+        value={latest.pm10}
+        unit="µg/m³"
+        min={0}
+        max={500}
         thresholds={[54, 154, 254, 354, 424]} // Based on EPA standards
+      />
+
+      {/* ESP v2.1 device telemetry */}
+      <GaugeMeter
+        title="Sensor R₀"
+        value={latest.r0 ?? 0}
+        unit="Ω"
+        min={0}
+        max={50000}
+        thresholds={[500, 5000, 15000, 30000, 45000]}
+      />
+      <GaugeMeter
+        title="Free Heap"
+        value={latest.free_heap ?? 0}
+        unit="KB"
+        min={0}
+        max={300}
+        thresholds={[50, 100, 150, 200, 250]}
       />
     </div>
   );

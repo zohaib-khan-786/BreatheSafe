@@ -10,21 +10,68 @@ type Status = {
   color: string;
 };
 
-// ✅ Status logic (based on PM + gases)
-const getStatus = (data: SensorReading): Status => {
-  const { pm25, pm10, co2 } = data;
+// ✅ Status logic (prefer ESP quality, fallback to PM + gases)
+const qualityToStatus: Record<string, Status> = {
+  EXCELLENT: { label: "EXCELLENT", color: "#00e4d4" },
+  GOOD:       { label: "GOOD",       color: "#35c8a3" },
+  MODERATE:   { label: "MODERATE",   color: "#ffcc00" },
+  POOR:       { label: "POOR",       color: "#ff5b5b" },
+  VERY_POOR:  { label: "VERY_POOR",  color: "#c30052" },
+  HAZARDOUS:  { label: "HAZARDOUS",  color: "#6a0dad" },
+};
 
-  if (pm25 <= 10 && pm10 <= 20 && co2 <= 600)
-    return { label: "Good", color: "#00e4d4" };
-  if (pm25 <= 20 && pm10 <= 40 && co2 <= 1000)
-    return { label: "Fair", color: "#35c8a3" };
-  if (pm25 <= 25 && pm10 <= 50 && co2 <= 1500)
-    return { label: "Moderate", color: "#ffcc00" };
-  if (pm25 <= 50 && pm10 <= 100 && co2 <= 2000)
-    return { label: "Poor", color: "#ff5b5b" };
-  if (pm25 <= 75 && pm10 <= 150 && co2 <= 3000)
-    return { label: "Very Poor", color: "#c30052" };
-  return { label: "Extremely Poor", color: "#6a0dad" };
+// ✅ Score-based status matching the ESP32 AirQualityCalculator.
+// The firmware sums weighted penalties from 6 pollutants (CO2, PM2.5, PM10,
+// CO, smoke, NH3) and maps the total score to a category.
+const assessFromScore = (data: SensorReading): Status => {
+  let score = 0;
+  if (data.co2 <= 800) score += 0;
+  else if (data.co2 <= 1000) score += 1;
+  else if (data.co2 <= 1500) score += 2;
+  else if (data.co2 <= 2000) score += 3;
+  else score += 5;
+
+  if (data.pm25 <= 12) score += 0;
+  else if (data.pm25 <= 25) score += 1;
+  else if (data.pm25 <= 35) score += 2;
+  else if (data.pm25 <= 55) score += 3;
+  else score += 5;
+
+  if (data.pm10 <= 20) score += 0;
+  else if (data.pm10 <= 50) score += 1;
+  else if (data.pm10 <= 100) score += 2;
+  else if (data.pm10 <= 150) score += 3;
+  else score += 4;
+
+  if (data.co <= 9) score += 0;
+  else if (data.co <= 20) score += 2;
+  else if (data.co <= 35) score += 3;
+  else score += 5;
+
+  if (data.smoke <= 5) score += 0;
+  else if (data.smoke <= 15) score += 1;
+  else if (data.smoke <= 30) score += 3;
+  else score += 4;
+
+  if (data.nh3 <= 25) score += 0;
+  else if (data.nh3 <= 50) score += 1;
+  else score += 2;
+
+  if (score <= 1) return { label: "EXCELLENT", color: "#00e4d4" };
+  if (score <= 4) return { label: "GOOD", color: "#35c8a3" };
+  if (score <= 8) return { label: "MODERATE", color: "#ffcc00" };
+  if (score <= 12) return { label: "POOR", color: "#ff5b5b" };
+  if (score <= 16) return { label: "VERY_POOR", color: "#c30052" };
+  return { label: "HAZARDOUS", color: "#6a0dad" };
+};
+
+const getStatus = (data: SensorReading): Status => {
+  // If ESP provides a quality string, use it directly.
+  if (data.quality && qualityToStatus[data.quality]) {
+    return qualityToStatus[data.quality];
+  }
+  // Fallback: replicate the ESP32 weighted-pollutant scoring algorithm.
+  return assessFromScore(data);
 };
 
 // ✅ Random position generator

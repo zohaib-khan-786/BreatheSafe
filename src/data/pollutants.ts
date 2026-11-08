@@ -1,6 +1,6 @@
 export const pollutantData = [
   {
-    heading: "Good",
+    heading: "EXCELLENT",
     details: [
       "Ozone (O₃)",
       "Nitrogen Dioxide (NO₂)",
@@ -12,7 +12,7 @@ export const pollutantData = [
     color: { bg: "bg-safe/5", solid: "bg-safe", text: "text-white" },
   },
   {
-    heading: "Fair",
+    heading: "GOOD",
     details: [
       "Ozone (O₃)",
       "Nitrogen Dioxide (NO₂)",
@@ -24,7 +24,7 @@ export const pollutantData = [
     color: { bg: "bg-info/5", solid: "bg-info", text: "text-white" },
   },
   {
-    heading: "Moderate",
+    heading: "MODERATE",
     details: [
       "Ozone (O₃)",
       "Nitrogen Dioxide (NO₂)",
@@ -36,7 +36,7 @@ export const pollutantData = [
     color: { bg: "bg-warning/5", solid: "bg-warning", text: "text-white" },
   },
   {
-    heading: "Poor",
+    heading: "POOR",
     details: [
       "Ozone (O₃)",
       "Nitrogen Dioxide (NO₂)",
@@ -48,7 +48,7 @@ export const pollutantData = [
     color: { bg: "bg-orange-500/5", solid: "bg-orange-500", text: "text-white" },
   },
   {
-    heading: "Very Poor",
+    heading: "VERY_POOR",
     details: [
       "Ozone (O₃)",
       "Nitrogen Dioxide (NO₂)",
@@ -60,7 +60,7 @@ export const pollutantData = [
     color: { bg: "bg-danger/5", solid: "bg-danger", text: "text-white" },
   },
   {
-    heading: "Extremely Poor",
+    heading: "HAZARDOUS",
     details: [
       "Ozone (O₃)",
       "Nitrogen Dioxide (NO₂)",

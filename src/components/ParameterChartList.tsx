@@ -15,6 +15,11 @@ export default function ParameterChartList() {
       <ChartCard title="PM 1.0" unit="µg/m³" endpoint="/api/sensor/pm1" />
       <ChartCard title="PM 2.5" unit="µg/m³" endpoint="/api/sensor/pm25" />
       <ChartCard title="PM 10" unit="µg/m³" endpoint="/api/sensor/pm10" />
+
+      {/* ESP v2.1 device telemetry */}
+      <ChartCard title="Sensor R₀" unit="Ω" endpoint="/api/sensor/r0" />
+      <ChartCard title="Free Heap" unit="KB" endpoint="/api/sensor/free_heap" />
+      <ChartCard title="Uptime" unit="s" endpoint="/api/sensor/uptime" />
     </div>
   );
 }

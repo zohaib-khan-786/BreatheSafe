@@ -9,8 +9,8 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlserver"
-  url      = env("DATABASE_URL")
+  provider = "sqlite"
+  url      = env("DATABASE_URL") ?? "file:./breathe_safe.db"
 }
 
 model User {
@@ -31,18 +31,24 @@ model RefreshToken {
 }
 
 model SensorReading {
-  id          Int      @id @default(autoincrement())
-  timestamp   DateTime @default(now())
-  co2         Float
-  nh3         Float
-  alcohol     Float
-  co          Float
-  benzene     Float
-  smoke       Float
-  temperature Float
-  humidity    Float
-  pressure    Float
-  pm1         Float
-  pm25        Float
-  pm10        Float
+  id              Int      @id @default(autoincrement())
+  timestamp       DateTime @default(now())
+  co2             Float
+  nh3             Float
+  alcohol         Float
+  co              Float
+  benzene         Float
+  smoke           Float
+  temperature     Float
+  humidity        Float
+  pressure        Float
+  pm1             Float
+  pm25            Float
+  pm10           Float
+  // ESP v2.1 extended telemetry
+  humiditySource  String?  @map("humidity_source")
+  r0              Float?
+  firmwareVersion String?  @map("firmware_version")
+  uptime          Float?
+  freeHeap        Int?     @map("free_heap")
 }

@@ -1,13 +1,31 @@
 // app/api/sensor/[field]/route.ts
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import { sensorCache } from "@/lib/cache";
+import { historyLimiter } from "@/lib/rateLimit";
 
-// Allowed fields
+// Allowed fields — must stay in sync with the Prisma SensorReading model.
 const validFields = [
   "co2", "nh3", "alcohol", "co", "benzene", "smoke",
   "temperature", "humidity", "pressure",
-  "pm1", "pm25", "pm10"
+  "pm1", "pm25", "pm10",
+  // ESP v2.1 extended telemetry (API uses snake_case)
+  "r0", "humidity_source", "firmware_version", "uptime", "free_heap",
 ] as const;
+
+// Translate API snake_case field names to Prisma camelCase field names.
+function toPrismaField(apiField: string): string {
+  switch (apiField) {
+    case "humidity_source":
+      return "humiditySource";
+    case "firmware_version":
+      return "firmwareVersion";
+    case "free_heap":
+      return "freeHeap";
+    default:
+      return apiField; // already matches Prisma name
+  }
+}
 
 type Field = typeof validFields[number];
 
@@ -82,6 +100,13 @@ export async function GET(
   try {
     const field = (await params).field.toLowerCase();
 
+    // Rate limit by client IP — dashboards poll on interaction, not per frame.
+    const clientIp =
+      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    if (!historyLimiter.allow(clientIp)) {
+      return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+    }
+
     // Optional date range
     const { searchParams } = new URL(req.url);
     const from = new Date(
@@ -141,18 +166,37 @@ export async function GET(
       return NextResponse.json({ error: "Invalid field" }, { status: 400 });
     }
 
+    const prismaField = toPrismaField(field);
+
+    // Cache per (field, from, to) — sensor data is append-only, so a short
+    // TTL is safe and cuts DB round-trips under concurrent dashboard polls.
+    const cacheKey = `sensor:${field}:${from.toISOString()}:${to.toISOString()}`;
+    const cached = sensorCache.get(cacheKey);
+    if (cached) {
+      return NextResponse.json(cached, {
+        headers: { "Cache-Control": "public, max-age=15, stale-while-revalidate=30" },
+      });
+    }
+
     const data = await prisma.sensorReading.findMany({
       where: { timestamp: { gte: from, lte: to } },
       orderBy: { timestamp: "asc" },
-      select: { timestamp: true, [field]: true },
+      select: { timestamp: true, [prismaField]: true },
     });
 
-    return NextResponse.json(
-      data.map((d) => ({
-        time: (d.timestamp as Date).toISOString(),
-        value: d[field as Field] as number,
-      }))
-    );
+    // Numeric fields return numbers; string fields (source/version) return
+    // strings. Charts only use numeric fields, but the API stays generic.
+    const isStringField = field === "humidity_source" || field === "firmware_version";
+    const payload = data.map((d) => ({
+      time: (d.timestamp as Date).toISOString(),
+      value: isStringField ? (d[field as Field] as string) : Number(d[field as Field] ?? 0),
+    }));
+
+    sensorCache.set(cacheKey, payload);
+
+    return NextResponse.json(payload, {
+      headers: { "Cache-Control": "public, max-age=15, stale-while-revalidate=30" },
+    });
   } catch (err) {
     console.error("API error:", err);
     return NextResponse.json({ error: "Server error" }, { status: 500 });

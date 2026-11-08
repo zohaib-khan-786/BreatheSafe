@@ -33,6 +33,52 @@ const getAQICategory = (aqi: number): string => {
   return "HAZARDOUS";
 };
 
+// ✅ Replicates the ESP32 AirQualityCalculator. The firmware sums weighted
+// penalties from 6 pollutants (CO2, PM2.5, PM10, CO, smoke, NH3) and maps the
+// total score to a category. This is what the ESP LCD shows — it is computed
+// independently of the AQI number, so the two can disagree.
+const assessFromScore = (data: SensorReading): string => {
+  let score = 0;
+  if (data.co2 <= 800) score += 0;
+  else if (data.co2 <= 1000) score += 1;
+  else if (data.co2 <= 1500) score += 2;
+  else if (data.co2 <= 2000) score += 3;
+  else score += 5;
+
+  if (data.pm25 <= 12) score += 0;
+  else if (data.pm25 <= 25) score += 1;
+  else if (data.pm25 <= 35) score += 2;
+  else if (data.pm25 <= 55) score += 3;
+  else score += 5;
+
+  if (data.pm10 <= 20) score += 0;
+  else if (data.pm10 <= 50) score += 1;
+  else if (data.pm10 <= 100) score += 2;
+  else if (data.pm10 <= 150) score += 3;
+  else score += 4;
+
+  if (data.co <= 9) score += 0;
+  else if (data.co <= 20) score += 2;
+  else if (data.co <= 35) score += 3;
+  else score += 5;
+
+  if (data.smoke <= 5) score += 0;
+  else if (data.smoke <= 15) score += 1;
+  else if (data.smoke <= 30) score += 3;
+  else score += 4;
+
+  if (data.nh3 <= 25) score += 0;
+  else if (data.nh3 <= 50) score += 1;
+  else score += 2;
+
+  if (score <= 1) return "EXCELLENT";
+  if (score <= 4) return "GOOD";
+  if (score <= 8) return "MODERATE";
+  if (score <= 12) return "POOR";
+  if (score <= 16) return "VERY_POOR";
+  return "HAZARDOUS";
+};
+
 // Color mapping for AQI categories
 const aqiColors: Record<string, string> = {
   "EXCELLENT": "#22c55e",    // Green
@@ -85,6 +131,20 @@ const getAQIIcon = (category: string) => {
 
 let socket: Socket<ServerToClientEvents> | null = null;
 
+// Format seconds into a human-readable uptime string
+function formatUptime(totalSeconds: number): string {
+  if (!Number.isFinite(totalSeconds) || totalSeconds < 0) return "—";
+  const s = Math.floor(totalSeconds);
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${sec}s`;
+  return `${sec}s`;
+}
+
 export default function Dashboard() {
   const { theme } = useTheme();
   const { addReading } = useSensorStore();
@@ -96,12 +156,28 @@ export default function Dashboard() {
   // Socket.io connection
   useEffect(() => {
     if (!socket) {
-      socket = io(
-        process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3000"
-      );
+      socket = io(process.env.NEXT_PUBLIC_SOCKET_URL, {
+        transports: ["websocket"],
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionAttempts: 5
+      });
 
       socket.on("connect", () => {
-        console.log("✅ Socket connected:", socket?.id);
+        console.log("✅ Socket connected:", socket?.id, "URL:", process.env.NEXT_PUBLIC_SOCKET_URL);
+      // Debug: log when newReading arrives
+      socket.on("newReading", (data: SensorReading) => {
+        console.log("📡 Received newReading:", {
+          timestamp: data.timestamp,
+          aqi: data.aqi,
+          quality: data.quality,
+          r0: data.r0,
+          firmware: data.firmware_version,
+          uptime: data.uptime
+        });
+        setLatest(data);
+        addReading(data);
+      });
       });
 
       socket.on("disconnect", () => {
@@ -159,8 +235,14 @@ export default function Dashboard() {
   }, []);
 
   const currentAQI = latest?.aqi || 0;
-  const currentCategory = getAQICategory(currentAQI);
-  const currentColor = aqiColors[currentCategory] || "#22c55e";
+// Prefer the quality reported by the ESP if it exists; otherwise replicate
+// the ESP32 weighted-pollutant scoring algorithm (not the AQI band).
+const currentCategory = latest?.quality && aqiColors[latest.quality]
+  ? latest.quality
+  : latest
+    ? assessFromScore(latest)
+    : getAQICategory(currentAQI);
+const currentColor = aqiColors[currentCategory] || "#22c55e";
 
   return (
     <div className="p-8 max-w-6xl mx-auto">
@@ -259,6 +341,30 @@ export default function Dashboard() {
             <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-lg">
               <div className="text-gray-500">Humidity</div>
               <div className="font-semibold">{latest.humidity ? latest.humidity.toFixed(0) : 0}%</div>
+            </div>
+          </div>
+        )}
+
+        {/* Device telemetry (ESP v2.1) */}
+        {latest && (
+          <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-lg">
+              <div className="text-gray-500">Sensor R₀</div>
+              <div className="font-semibold">{latest.r0 ? latest.r0.toFixed(0) : "—"} Ω</div>
+            </div>
+            <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-lg">
+              <div className="text-gray-500">Humidity source</div>
+              <div className="font-semibold">{latest.humidity_source || "—"}</div>
+            </div>
+            <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-lg">
+              <div className="text-gray-500">Firmware</div>
+              <div className="font-semibold">{latest.firmware_version || "—"}</div>
+            </div>
+            <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-lg">
+              <div className="text-gray-500">Uptime</div>
+              <div className="font-semibold">
+                {latest.uptime ? formatUptime(latest.uptime) : "—"}
+              </div>
             </div>
           </div>
         )}

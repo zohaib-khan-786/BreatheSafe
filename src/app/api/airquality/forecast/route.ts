@@ -1,6 +1,8 @@
 // app/api/airquality/forecast/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { sensorCache } from '@/lib/cache';
+import { historyLimiter } from '@/lib/rateLimit';
 
 interface Forecast {
   day: string;
@@ -257,17 +259,40 @@ function generateFallbackForecast(): Forecast[] {
 
 export async function GET(request: NextRequest) {
   try {
+    // Rate limit per client IP
+    const clientIp =
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      "unknown";
+    if (!historyLimiter.allow(clientIp)) {
+      return NextResponse.json(
+        { error: "Too many requests" },
+        { status: 429 }
+      );
+    }
+
+    // Check in-memory cache first
+    const cacheKey = "forecast:v1";
+    const cached = sensorCache.get(cacheKey);
+    if (cached) {
+      return NextResponse.json(cached, {
+        headers: { "Cache-Control": "public, max-age=15, stale-while-revalidate=30" },
+      });
+    }
+
     const forecast = await generateForecast();
-    
+
+    // Cache the result
+    sensorCache.set(cacheKey, forecast);
+
     return NextResponse.json(forecast, {
       headers: {
-        'Cache-Control': 'public, s-maxage=3600' // Cache for 1 hour
-      }
+        "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=60",
+      },
     });
   } catch (error) {
-    console.error('Forecast API error:', error);
+    console.error("Forecast API error:", error);
     return NextResponse.json(
-      { error: 'Failed to generate forecast' },
+      { error: "Failed to generate forecast" },
       { status: 500 }
     );
   }
